@@ -7,7 +7,8 @@ Currently migrating from ROS1 Noetic to ROS2 Jazzy — this is v0.1.0 of that mi
 
 ## Demo
 
-[screenshot/GIF here]
+[<img width="531" height="430" alt="image" src="https://github.com/user-attachments/assets/6cf68e46-3f26-4c96-adc6-4609382eb4d5" />
+]
 
 CR5 arm executing a layup sequence — 8 waypoints, raster pattern,
 controlled entirely from async Python with no manual intervention.
