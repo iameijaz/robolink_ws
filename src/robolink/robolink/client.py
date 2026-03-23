@@ -44,6 +44,9 @@ class ArmClient:
         self._connected = False
         self._marker_id = 0
         self._trail_positions = []
+        self._marker_id = 0
+        self._trail_positions = []
+        self.current_joints = JointState()
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 
@@ -179,6 +182,7 @@ class ArmClient:
                 await asyncio.sleep(
                     delay if delay is not None else self.step_delay
                 )
+                self.current_joints = state
                 return MoveResult(success=True, joint_state=state)
         except asyncio.TimeoutError:
             raise MoveTimeoutError(
@@ -249,3 +253,27 @@ class ArmClient:
             )
             yield state
             await asyncio.sleep(interval)
+
+    async def set_io(self, name: str, on: bool) -> None:
+        """
+        Set a named digital output.
+
+        Publishes to /io_command as a String message: "NAME:ON" or "NAME:OFF".
+        In simulation: no physical effect — command is logged only.
+        In v0.2.0: connects to real IO driver.
+        """
+        self._require_connected()
+        await asyncio.get_event_loop().run_in_executor(
+            _executor, self._publish_io, name, on
+        )
+
+    def _publish_io(self, name: str, on: bool) -> None:
+        import rclpy
+        from std_msgs.msg import String
+        if not hasattr(self, '_io_pub'):
+            self._io_pub = self._node.create_publisher(String, '/io_command', 10)
+        msg = String()
+        msg.data = f"{name}:{'ON' if on else 'OFF'}"
+        self._io_pub.publish(msg)
+        rclpy.spin_once(self._node, timeout_sec=0.05)
+        print(f"    [io] {name} → {'ON' if on else 'OFF'}")

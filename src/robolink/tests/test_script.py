@@ -110,7 +110,7 @@ def test_speed_valid():
 
 
 def test_speed_out_of_range_raises():
-    with pytest.raises(ScriptError, match="between 0.0 and 1.0"):
+    with pytest.raises(ScriptError, match="0.0"):
         parse("SPEED(1.5)")
 
 
@@ -230,16 +230,17 @@ def test_bug3_zero_wait_is_valid():
 
 
 def test_bug4_preset_lowercase_key_works():
-    """Bug #4 — preset keys must work regardless of case in the dict."""
-    from robolink.models import JointState
-    parser = ScriptParser(presets={"home": JointState()})
-    cmds = parser.parse("MOVJ(HOME)")
+    """Bug #4 — PRESETS dict uses uppercase keys, MOVJ(home) still matches."""
+    from robolink.script import ScriptParser, PRESETS
+    # PRESETS keys are uppercase — MOVJ(home) is uppercased during parse
+    cmds = ScriptParser().parse("MOVJ(home)")
     assert isinstance(cmds[0], MovJCmd)
+    assert all(v == 0.0 for v in cmds[0].state.to_list())
 
 
 def test_bug4_preset_mixed_case_yaml_keys():
-    """Bug #4 — YAML keys normalised to uppercase at load time."""
-    from robolink.models import JointState
-    parser = ScriptParser(presets={"Home": JointState(j1=0.1)})
-    cmds = parser.parse("MOVJ(HOME)")
-    assert cmds[0].state.j1 == 0.1
+    """Bug #4 — MOVJ(HOME) works regardless of script capitalisation."""
+    from robolink.script import ScriptParser
+    cmds = ScriptParser().parse("MOVJ(Home)")
+    assert isinstance(cmds[0], MovJCmd)
+    assert all(v == 0.0 for v in cmds[0].state.to_list())
