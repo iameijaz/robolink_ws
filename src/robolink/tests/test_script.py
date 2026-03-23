@@ -1,0 +1,133 @@
+import pytest
+from robolink.script import ScriptParser, ScriptError
+from robolink.script import MovJCmd, MovLCmd, WaitCmd, SpeedCmd, RepeatCmd
+
+
+def parse(source):
+    return ScriptParser().parse(source)
+
+
+def test_movj_explicit():
+    cmds = parse("MOVJ(0, -0.8, 0.5, 0, 1.5, 0)")
+    assert isinstance(cmds[0], MovJCmd)
+    assert cmds[0].state.j2 == -0.8
+    assert cmds[0].state.j5 == 1.5
+
+
+def test_movj_broadcast_zero():
+    cmds = parse("MOVJ(0)")
+    assert all(v == 0.0 for v in cmds[0].state.to_list())
+
+
+def test_movj_broadcast_nonzero():
+    cmds = parse("MOVJ(0.5)")
+    assert all(v == 0.5 for v in cmds[0].state.to_list())
+
+
+def test_movj_preset_home():
+    cmds = parse("MOVJ(HOME)")
+    assert all(v == 0.0 for v in cmds[0].state.to_list())
+
+
+def test_movj_preset_case_insensitive():
+    cmds = parse("MOVJ(home)")
+    assert all(v == 0.0 for v in cmds[0].state.to_list())
+
+
+def test_movj_preset_layup_ready():
+    cmds = parse("MOVJ(LAYUP_READY)")
+    assert cmds[0].state.j1 == -2.9367
+
+
+def test_movj_wrong_count_raises():
+    with pytest.raises(ScriptError, match="1 value"):
+        parse("MOVJ(0, 0, 0)")
+
+
+def test_movj_unknown_preset_raises():
+    with pytest.raises(ScriptError, match="Unknown preset"):
+        parse("MOVJ(UNKNOWN)")
+
+
+def test_movl_parses():
+    cmds = parse("MOVL(0.3, 0.1, 0.4, 180, 0, 0)")
+    assert isinstance(cmds[0], MovLCmd)
+    assert cmds[0].x == 0.3
+    assert cmds[0].rx == 180.0
+
+
+def test_movl_wrong_count_raises():
+    with pytest.raises(ScriptError, match="exactly 6 values"):
+        parse("MOVL(0.3, 0.1, 0.4)")
+
+
+def test_wait():
+    cmds = parse("WAIT(1.5)")
+    assert isinstance(cmds[0], WaitCmd)
+    assert cmds[0].seconds == 1.5
+
+
+def test_wait_bad_value_raises():
+    with pytest.raises(ScriptError, match="requires a number"):
+        parse("WAIT(abc)")
+
+
+def test_speed_valid():
+    cmds = parse("SPEED(0.7)")
+    assert isinstance(cmds[0], SpeedCmd)
+    assert cmds[0].value == 0.7
+
+
+def test_speed_out_of_range_raises():
+    with pytest.raises(ScriptError, match="between 0.0 and 1.0"):
+        parse("SPEED(1.5)")
+
+
+def test_repeat_block():
+    source = "REPEAT(2)\n    MOVJ(0, -0.5, 0, 0, 0, 0)\n    WAIT(0.5)\nEND"
+    cmds = parse(source)
+    assert isinstance(cmds[0], RepeatCmd)
+    assert cmds[0].times == 2
+    assert len(cmds[0].body) == 2
+
+
+def test_empty_repeat_raises():
+    with pytest.raises(ScriptError, match="empty"):
+        parse("REPEAT(3)\nEND")
+
+
+def test_comment_full_line_ignored():
+    cmds = parse("# full line comment\nMOVJ(HOME)")
+    assert len(cmds) == 1
+
+
+def test_comment_inline_ignored():
+    cmds = parse("MOVJ(HOME) # go home")
+    assert isinstance(cmds[0], MovJCmd)
+
+
+def test_unknown_command_raises():
+    with pytest.raises(ScriptError, match="Unknown command"):
+        parse("FLY(0, 0, 0)")
+
+
+def test_full_layup_script():
+    source = """
+# carbon layup test
+MOVJ(HOME)
+SPEED(0.7)
+MOVJ(0, -0.8, 0.5, 0, 1.5, 0)
+MOVJ(0, -0.6, 0.5, 0, 1.5, 0)
+REPEAT(2)
+    MOVJ(0, -0.4, 0.5, 0, 1.5, 0)
+    WAIT(0.3)
+END
+MOVJ(HOME)
+"""
+    cmds = parse(source)
+    assert len(cmds) == 6
+    assert isinstance(cmds[0], MovJCmd)
+    assert isinstance(cmds[1], SpeedCmd)
+    assert isinstance(cmds[4], RepeatCmd)
+    assert cmds[4].times == 2
+    assert isinstance(cmds[5], MovJCmd)

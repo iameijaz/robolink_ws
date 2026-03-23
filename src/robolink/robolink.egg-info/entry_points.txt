@@ -1,0 +1,2 @@
+[console_scripts]
+robolink = robolink.cli:app
