@@ -1,0 +1,9 @@
+# surface_inspection.vas
+MOVJ(HOME)
+SPEED(0.3)          # slow — precision inspection
+REPEAT(4)
+    MOVJ(...)       # sweep row
+    WAIT(0.5)       # dwell — simulated sensor reading
+    MOVJ(...)       # next row
+END
+MOVJ(HOME)

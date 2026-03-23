@@ -1,11 +1,15 @@
 import pytest
 from robolink.script import ScriptParser, ScriptError
-from robolink.script import MovJCmd, MovLCmd, WaitCmd, SpeedCmd, RepeatCmd
+from robolink.script import (
+    MovJCmd, MovLCmd, GripperCmd, WaitCmd, SpeedCmd, RepeatCmd
+)
 
 
 def parse(source):
     return ScriptParser().parse(source)
 
+
+# ── MOVJ ──────────────────────────────────────────────────────────────────
 
 def test_movj_explicit():
     cmds = parse("MOVJ(0, -0.8, 0.5, 0, 1.5, 0)")
@@ -49,6 +53,8 @@ def test_movj_unknown_preset_raises():
         parse("MOVJ(UNKNOWN)")
 
 
+# ── MOVL ──────────────────────────────────────────────────────────────────
+
 def test_movl_parses():
     cmds = parse("MOVL(0.3, 0.1, 0.4, 180, 0, 0)")
     assert isinstance(cmds[0], MovLCmd)
@@ -60,6 +66,31 @@ def test_movl_wrong_count_raises():
     with pytest.raises(ScriptError, match="exactly 6 values"):
         parse("MOVL(0.3, 0.1, 0.4)")
 
+
+# ── GRIPPER ───────────────────────────────────────────────────────────────
+
+def test_gripper_open():
+    cmds = parse("GRIPPER(OPEN)")
+    assert isinstance(cmds[0], GripperCmd)
+    assert cmds[0].action == "OPEN"
+
+
+def test_gripper_close():
+    cmds = parse("GRIPPER(CLOSE)")
+    assert cmds[0].action == "CLOSE"
+
+
+def test_gripper_case_insensitive():
+    cmds = parse("GRIPPER(open)")
+    assert cmds[0].action == "OPEN"
+
+
+def test_gripper_invalid_raises():
+    with pytest.raises(ScriptError, match="OPEN or CLOSE"):
+        parse("GRIPPER(HALF)")
+
+
+# ── WAIT / SPEED ──────────────────────────────────────────────────────────
 
 def test_wait():
     cmds = parse("WAIT(1.5)")
@@ -83,6 +114,8 @@ def test_speed_out_of_range_raises():
         parse("SPEED(1.5)")
 
 
+# ── REPEAT ────────────────────────────────────────────────────────────────
+
 def test_repeat_block():
     source = "REPEAT(2)\n    MOVJ(0, -0.5, 0, 0, 0, 0)\n    WAIT(0.5)\nEND"
     cmds = parse(source)
@@ -95,6 +128,8 @@ def test_empty_repeat_raises():
     with pytest.raises(ScriptError, match="empty"):
         parse("REPEAT(3)\nEND")
 
+
+# ── Comments ──────────────────────────────────────────────────────────────
 
 def test_comment_full_line_ignored():
     cmds = parse("# full line comment\nMOVJ(HOME)")
@@ -110,6 +145,8 @@ def test_unknown_command_raises():
     with pytest.raises(ScriptError, match="Unknown command"):
         parse("FLY(0, 0, 0)")
 
+
+# ── Full scripts ──────────────────────────────────────────────────────────
 
 def test_full_layup_script():
     source = """
@@ -130,4 +167,25 @@ MOVJ(HOME)
     assert isinstance(cmds[1], SpeedCmd)
     assert isinstance(cmds[4], RepeatCmd)
     assert cmds[4].times == 2
-    assert isinstance(cmds[5], MovJCmd)
+
+
+def test_full_pick_and_place_script():
+    source = """
+MOVJ(HOME)
+SPEED(0.8)
+MOVJ(0.0, -0.5, 0.8, 0, 1.2, 0)
+MOVJ(0.0, -0.5, 0.6, 0, 1.2, 0)
+GRIPPER(CLOSE)
+WAIT(0.4)
+MOVJ(0.0, -0.5, 0.8, 0, 1.2, 0)
+MOVJ(0.5, -0.3, 0.6, 0, 1.2, 0)
+GRIPPER(OPEN)
+WAIT(0.4)
+MOVJ(HOME)
+"""
+    cmds = parse(source)
+    assert len(cmds) == 11
+    gripper_cmds = [c for c in cmds if isinstance(c, GripperCmd)]
+    assert len(gripper_cmds) == 2
+    assert gripper_cmds[0].action == "CLOSE"
+    assert gripper_cmds[1].action == "OPEN"

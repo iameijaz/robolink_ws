@@ -17,6 +17,8 @@ Syntax:
     MOVJ(HOME)                        — named preset
     MOVJ(LAYUP_READY)                 — named preset
     MOVL(x, y, z, rx, ry, rz)        — Cartesian linear move (v0.2.0)
+    GRIPPER(OPEN)                     — open gripper
+    GRIPPER(CLOSE)                    — close gripper
     WAIT(1.5)                         — pause N seconds
     SPEED(0.7)                        — set speed multiplier 0.0–1.0
     REPEAT(3) ... END                 — repeat a block N times
@@ -49,6 +51,10 @@ class MovLCmd:
     rx: float; ry: float; rz: float
 
 @dataclass
+class GripperCmd:
+    action: str  # "OPEN" or "CLOSE"
+
+@dataclass
 class WaitCmd:
     seconds: float
 
@@ -62,7 +68,7 @@ class RepeatCmd:
     body: list[Any]
 
 
-Command = MovJCmd | MovLCmd | WaitCmd | SpeedCmd | RepeatCmd
+Command = MovJCmd | MovLCmd | GripperCmd | WaitCmd | SpeedCmd | RepeatCmd
 
 
 # ── Parser ─────────────────────────────────────────────────────────────────
@@ -122,6 +128,10 @@ class ScriptParser:
                 commands.append(self._parse_movl(lineno, line))
                 pos += 1
 
+            elif token == 'GRIPPER':
+                commands.append(self._parse_gripper(lineno, line))
+                pos += 1
+
             elif token == 'WAIT':
                 commands.append(self._parse_single_float(
                     lineno, line, WaitCmd, 'WAIT'
@@ -153,7 +163,7 @@ class ScriptParser:
             else:
                 raise ScriptError(
                     f"Line {lineno}: Unknown command '{token}'. "
-                    f"Valid commands: MOVJ, MOVL, WAIT, SPEED, REPEAT"
+                    f"Valid commands: MOVJ, MOVL, GRIPPER, WAIT, SPEED, REPEAT"
                 )
 
         return commands, pos
@@ -170,13 +180,11 @@ class ScriptParser:
     def _parse_movj(self, lineno: int, line: str) -> MovJCmd:
         raw = self._args(lineno, line)
 
-        # Named preset — case insensitive
         if raw.upper() in self.presets:
             return MovJCmd(state=self.presets[raw.upper()])
 
         parts = [p.strip() for p in raw.split(',')]
 
-        # Scalar broadcast — MOVJ(0) means all joints to 0
         if len(parts) == 1:
             try:
                 val = float(parts[0])
@@ -188,7 +196,6 @@ class ScriptParser:
                 )
             return MovJCmd(state=JointState(val, val, val, val, val, val))
 
-        # Full 6-tuple
         if len(parts) != 6:
             raise ScriptError(
                 f"Line {lineno}: MOVJ requires 1 value (broadcast), "
@@ -220,6 +227,17 @@ class ScriptParser:
         except ValueError as e:
             raise ScriptError(f"Line {lineno}: Invalid value in MOVL — {e}")
         return MovLCmd(x=x, y=y, z=z, rx=rx, ry=ry, rz=rz)
+
+    def _parse_gripper(self, lineno: int, line: str) -> GripperCmd:
+        raw = self._args(lineno, line).strip().upper()
+        if raw not in ("OPEN", "CLOSE"):
+            raise ScriptError(
+                f"Line {lineno}: GRIPPER argument must be OPEN or CLOSE. "
+                f"Got '{raw}'.\n"
+                f"  GRIPPER(OPEN)\n"
+                f"  GRIPPER(CLOSE)"
+            )
+        return GripperCmd(action=raw)
 
     def _parse_single_float(self, lineno, line, cls, name):
         raw = self._args(lineno, line)
@@ -267,6 +285,9 @@ class ScriptRunner:
         async def go_to_layup_ready() -> MoveResult
             Move to layup start position.
 
+        async def set_gripper(closed: bool) -> None
+            Actuate gripper. True = close, False = open.
+
         float step_delay
             Default seconds between moves.
 
@@ -313,6 +334,10 @@ class ScriptRunner:
                 f"See V_ALPHA_SCRIPT.md for the backend contract. "
                 f"Planned for v0.2.0 with MoveIt2."
             )
+
+        elif isinstance(cmd, GripperCmd):
+            print(f"  GRIPPER({cmd.action})")
+            await self.arm.set_gripper(cmd.action == "CLOSE")
 
         elif isinstance(cmd, WaitCmd):
             print(f"  WAIT({cmd.seconds}s)")

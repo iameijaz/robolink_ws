@@ -1,0 +1,34 @@
+# V-Alpha Script — pick and place
+#
+# Demonstrates V-Alpha Script as a task language, not just a motion language.
+# A non-roboticist can read this and understand what the robot does.
+#
+# This is the power of the abstraction:
+# the script reads like a work instruction.
+# The runtime handles everything else.
+
+MOVJ(HOME)
+SPEED(0.8)
+
+# Approach pick point — above first
+MOVJ(0.0, -0.5, 0.8, 0, 1.2, 0)
+MOVJ(0.0, -0.5, 0.6, 0, 1.2, 0)    # at pick height
+
+# Pick
+GRIPPER(CLOSE)
+WAIT(0.4)                            # let gripper settle
+
+# Lift and move to place
+MOVJ(0.0, -0.5, 0.8, 0, 1.2, 0)    # lift clear
+SPEED(0.6)                           # slow down for place
+MOVJ(0.5, -0.3, 0.8, 0, 1.2, 0)    # above place point
+MOVJ(0.5, -0.3, 0.6, 0, 1.2, 0)    # at place height
+
+# Place
+GRIPPER(OPEN)
+WAIT(0.4)                            # let gripper settle
+
+# Return
+SPEED(1.0)
+MOVJ(0.5, -0.3, 0.8, 0, 1.2, 0)    # lift clear
+MOVJ(HOME)
