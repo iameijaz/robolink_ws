@@ -73,6 +73,13 @@ class ArmClient:
             '/joint_states',
             10,
         )
+        # Add to _init_ros:
+        from visualization_msgs.msg import MarkerArray
+        self._marker_pub = self._node.create_publisher(
+            MarkerArray, '/tcp_trail', 10
+        )
+        self._markers = MarkerArray()
+        self._marker_id = 0
 
     async def disconnect(self) -> None:
         """Shutdown ROS2 node cleanly."""
@@ -110,7 +117,30 @@ class ArmClient:
 
         # Spin once so the message actually goes out
         rclpy.spin_once(self._node, timeout_sec=0.1)
-
+    def _publish_trail_marker(self, position: tuple) -> None:
+        """Add a sphere marker at the given position."""
+        from visualization_msgs.msg import Marker
+        marker = Marker()
+        marker.header.frame_id = 'base_link'
+        marker.header.stamp = self._node.get_clock().now().to_msg()
+        marker.ns = 'tcp_trail'
+        marker.id = self._marker_id
+        self._marker_id += 1
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = position[0]
+        marker.pose.position.y = position[1]
+        marker.pose.position.z = position[2]
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.015
+        marker.scale.y = 0.015
+        marker.scale.z = 0.015
+        marker.color.r = 0.0
+        marker.color.g = 0.8
+        marker.color.b = 1.0
+        marker.color.a = 1.0
+        self._markers.markers.append(marker)
+        self._marker_pub.publish(self._markers)
     # ── motion commands ────────────────────────────────────────────────────
 
     async def move_to(
