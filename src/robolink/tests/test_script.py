@@ -189,3 +189,57 @@ MOVJ(HOME)
     assert len(gripper_cmds) == 2
     assert gripper_cmds[0].action == "CLOSE"
     assert gripper_cmds[1].action == "OPEN"
+
+
+# ── Bug regression tests (v0.1.1) ─────────────────────────────────────────
+
+def test_bug1_unterminated_repeat_raises():
+    """Bug #1 — REPEAT without END must raise, not silently return empty body."""
+    with pytest.raises(ScriptError, match="never closed"):
+        parse("REPEAT(3)\n    MOVJ(0)\n# no END")
+
+
+def test_bug1_unterminated_repeat_with_preceding_commands():
+    """Bug #1 — commands before unterminated REPEAT must not be silently dropped."""
+    with pytest.raises(ScriptError, match="never closed"):
+        parse("MOVJ(HOME)\nREPEAT(2)\n    WAIT(0.5)")
+
+
+def test_bug2_orphan_end_raises():
+    """Bug #2 — END without matching REPEAT must raise at top level."""
+    with pytest.raises(ScriptError, match="without a matching REPEAT"):
+        parse("WAIT(1.0)\nEND\nWAIT(2.0)")
+
+
+def test_bug2_orphan_end_does_not_truncate():
+    """Bug #2 — commands after orphan END must not be silently dropped."""
+    with pytest.raises(ScriptError):
+        parse("MOVJ(HOME)\nEND\nMOVJ(HOME)")
+
+
+def test_bug3_negative_wait_raises():
+    """Bug #3 — WAIT with negative value must raise at parse time."""
+    with pytest.raises(ScriptError, match=">= 0"):
+        parse("WAIT(-1.5)")
+
+
+def test_bug3_zero_wait_is_valid():
+    """Bug #3 — WAIT(0) is valid — yields control without pausing."""
+    cmds = parse("WAIT(0)")
+    assert cmds[0].seconds == 0.0
+
+
+def test_bug4_preset_lowercase_key_works():
+    """Bug #4 — preset keys must work regardless of case in the dict."""
+    from robolink.models import JointState
+    parser = ScriptParser(presets={"home": JointState()})
+    cmds = parser.parse("MOVJ(HOME)")
+    assert isinstance(cmds[0], MovJCmd)
+
+
+def test_bug4_preset_mixed_case_yaml_keys():
+    """Bug #4 — YAML keys normalised to uppercase at load time."""
+    from robolink.models import JointState
+    parser = ScriptParser(presets={"Home": JointState(j1=0.1)})
+    cmds = parser.parse("MOVJ(HOME)")
+    assert cmds[0].state.j1 == 0.1
