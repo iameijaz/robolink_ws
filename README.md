@@ -25,6 +25,10 @@ ros2 launch dobot_description sdk.launch.py
 cd robolink_ws/src/robolink
 python3 examples/layup_demo.py
 ```
+Motion sequences are programmed in V-Alpha Script, a domain-specific language I designed for robot arm control. See [README.md](https://github.com/iameijaz/robolink_ws/blob/jazzy/src/robolink/V_ALPHA_SCRIPT.md)  for the language reference and architecture.
+
+Here is an example code in .vas:
+
 ```python
 import asyncio
 from robolink import ArmClient, JointState, LayupSequence
